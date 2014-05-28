@@ -1,0 +1,397 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<title>Untitled Document</title>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    
+<style type="text/css">
+body {
+	margin:0px;
+	width:100%;
+	height:100%;
+	overflow:hidden;
+	font-family:Arial;
+}
+        
+.header, .footer{
+	position: absolute;
+	background-color: #222;
+	text-align: center;
+}
+.header {
+	top: 0px;
+	left: 0px;
+	right: 0px;
+	height: 32px;
+	padding:6px;
+}
+.footer {
+	bottom: 0px;
+	left: 0px;
+	right: 0px;
+	height: 32px;
+	padding:2px;    
+}
+#title {
+    line-height: 32px;
+    font-size: 25px;
+    font-weight: bold;
+    color: #F9F9F9;
+    text-shadow: 0px -1px #000;
+    padding:0 60px;
+}
+
+#container{
+    position: absolute;
+    top: 44px;
+    left: 0px;
+    right: 0px;
+    bottom: 36px;
+    overflow:hidden;
+    background-color:#ddd;
+}
+#canvas{
+    cursor:crosshair ;
+    background-color:#fff;
+}
+#tmp_canvas {
+	position: absolute;
+	left: 0px; 
+	right: 0;
+	bottom: 0; 
+	top: 0;
+	cursor: crosshair;
+}
+.palette-case {
+    width:260px;
+    margin:auto;
+    text-align:center;
+}
+.palette-box {
+    float:left;
+    padding:2px 6px 2px 6px;
+}
+.palette {
+    border:1px solid #F9F9F9;
+    height:9px;
+    width:9px;
+}
+.red{ background-color:#c22; }
+.blue{ background-color:#22c; }
+.green{ background-color:#2c2; }
+.yellow{ background-color:#FF0; }
+.black{ background-color:#000; border:1px dashed #fff; }
+
+.hover { border:1px solid red; }
+.selected { border:1px solid red; }
+.left {float:left;}
+.right {float:right;}
+
+.panel {
+	border:1px solid #f9f9f9; 
+	padding:5px; 
+	margin-right:10px;
+}
+
+.tool {
+	background-color:#fff; 
+	margin:0 3px; 
+	height:16px;
+}
+</style>    
+    
+<script language="javascript">
+
+$(document).ready(function(){
+	var tmp_canvas, canvas;
+	var ctx, tmp_ctx;                // Context for main canvas and temporary canvas.
+	var tool;                        // Default tool is Pen (Switch statement below.)
+	var color = '#000';              // Default color for drawing is Black.
+	var size = 1;                    // Default size for drawing is 1.
+	var mouse = {x: 0, y: 0};        // Mouse Co-ordinates. (x,y).
+	var start_mouse = {x: 0, y: 0};  // Mouse click position before moving for drawing (x,y).
+	var points = [ ];                // Points list for mouse co-ordinates.
+	var offsetX;
+	var offsetY;
+	
+	// Init Canvas
+	newCanvas();
+	
+	function newCanvas(){
+		canvas = document.querySelector('#canvas');
+		ctx = canvas.getContext('2d');
+		var container = document.querySelector('#container');
+		var container_style = getComputedStyle(container);
+		canvas.width = parseInt(container_style.getPropertyValue('width'));
+		canvas.height = parseInt(container_style.getPropertyValue('height'));
+		
+		// Temp Canvas
+		tmp_canvas = document.createElement('canvas');
+		tmp_ctx = tmp_canvas.getContext('2d');
+		tmp_canvas.id = 'tmp_canvas';
+		tmp_canvas.width = canvas.width;
+		tmp_canvas.height = canvas.height;
+		tmp_ctx.lineJoin = 'round';
+		tmp_ctx.lineCap = 'round';
+
+		container.appendChild(tmp_canvas);		
+		
+		//Allows us to retrieve the current position of an element relative to the canvas.
+		var canvasOffset = $("#canvas").offset();
+		offsetX = canvasOffset.left;
+		offsetY = canvasOffset.top;
+	}
+	
+	// Pen tool selection.
+	$('#pen').on('click', function () {
+		$('img').removeClass('selected');
+		$(this).addClass('selected');
+		tool = $(this).attr('id');
+		console.log(tool);
+	});
+	
+	// Line tool selection.
+	$('#line').on('click', function () {
+		$('img').removeClass('selected');
+		$(this).addClass('selected');
+		tool = $(this).attr('id');
+		console.log(tool);
+	});
+	
+	// Brush tool selection.
+	$('#brush').on('click', function () {
+		$('img').removeClass('selected');
+		$(this).addClass('selected');
+		tool = $(this).attr('id');
+		console.log(tool);
+	});
+	
+	// Rectangle tool selection.
+	$('#rectangle').on('click', function () {
+		$('img').removeClass('selected');
+		$(this).addClass('selected');
+		tool = $(this).attr('id');
+		console.log(tool);
+	});
+	
+	// Init new Canvas
+	$('#new').on('click', function () {
+		newCanvas();		
+		console.log("Init New Canvas.");		
+	});
+	
+	// Reset palette selection (css) and select the clicked color for canvas strokeStyle.
+	$(".palette").click(function(){
+		$(".palette").css("border-color", "#ccc");
+		$(".palette").css("border-style", "solid");
+		
+		$(this).css("border-color", "#fff");
+		$(this).css("border-style", "dashed");
+		
+		color = $(this).css("background-color");
+		console.log(color);
+	});
+	
+	// Size selection (select) and select the size for canvas lineWidth.
+	$( ".size" ).change(function() {
+		size = $( this ).val();
+		console.log(size);
+	});
+	
+	
+	// Rectangle Tool
+	var onRectPaint = function () {
+		tmp_ctx.lineWidth = size;
+		tmp_ctx.strokeStyle = color;
+		tmp_ctx.fillStyle = color;
+		// Tmp canvas is always cleared up before drawing.
+		tmp_ctx.clearRect(0, 0, tmp_canvas.width, tmp_canvas.height);
+		tmp_ctx.beginPath();
+		
+		var x = Math.min(mouse.x, start_mouse.x);
+		var y = Math.min(mouse.y, start_mouse.y);
+		var width = Math.abs(mouse.x - start_mouse.x);
+		var height = Math.abs(mouse.y - start_mouse.y);
+		tmp_ctx.strokeRect(x, y, width, height);
+	};	
+	
+	// Line Tool
+	var onLinePaint = function() {
+		tmp_ctx.lineWidth = size;
+		tmp_ctx.strokeStyle = color;
+		tmp_ctx.fillStyle = color;
+		// Tmp canvas is always cleared up before drawing.
+		tmp_ctx.clearRect(0, 0, tmp_canvas.width, tmp_canvas.height);
+
+		tmp_ctx.beginPath();
+		tmp_ctx.moveTo(start_mouse.x, start_mouse.y);
+		tmp_ctx.lineTo(mouse.x, mouse.y);
+		tmp_ctx.stroke();
+	};
+	
+	// Brush Tool
+	var onBrushPaint = function(){
+		tmp_ctx.fillStyle = color;	
+		tmp_ctx.strokeStyle = color;	
+		
+  		for (var i = 0; i < points.length; i++) {
+    		tmp_ctx.beginPath();
+    		tmp_ctx.arc(points[i].x, points[i].y, size, false, Math.PI * 2, false);
+    		tmp_ctx.fill();
+    		tmp_ctx.stroke();
+  		}	
+	};
+	var callBrush = function(){
+		points.push({ x: mouse.x, y: mouse.y });
+		onBrushPaint();	
+	}
+	
+	// Pen Tool
+	var onPenPaint = function(){
+		tmp_ctx.lineWidth = size;
+		tmp_ctx.strokeStyle = color;
+		
+ 		tmp_ctx.beginPath();
+  		tmp_ctx.moveTo(points[0].x, points[0].y);
+  		for (var i = 1; i < points.length-2; i++) {
+			var c = (points[i].x + points[i + 1].x) / 2;
+    		var d = (points[i].y + points[i + 1].y) / 2;
+			tmp_ctx.quadraticCurveTo(points[i].x, points[i].y, c, d);
+  		}
+		// For the last 2 points
+		tmp_ctx.quadraticCurveTo(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y);
+  		tmp_ctx.stroke();		
+	};		
+	var callPen = function(){
+		points.push({ x: mouse.x, y: mouse.y });
+		onPenPaint();	
+	}
+	
+	// Mouse move event.
+	var move = function(e){
+		console.log("mouse move.");
+		var x = typeof e.pageX !== 'undefined' ? e.pageX : e.layerX;
+		var y = typeof e.pageY !== 'undefined' ? e.pageY : e.layerY;
+		mouse.x = parseInt(x - offsetX);
+		mouse.y = parseInt(y - offsetY);
+		//console.log(mouse.x + ","+(mouse.y));		
+	}
+	
+	// Mouse click event.
+	var start = function(e){
+		console.log("mouse click.");
+
+		var x = typeof e.pageX !== 'undefined' ? e.pageX : e.layerX;
+		var y = typeof e.pageY !== 'undefined' ? e.pageY : e.layerY;
+		mouse.x = parseInt(x - offsetX);
+		mouse.y = parseInt(y - offsetY);
+
+		console.log(mouse.x + ","+(mouse.y));		
+		
+		start_mouse.x = mouse.x;
+		start_mouse.y = mouse.y;
+		
+		switch(tool){
+			case 'line':
+				$(this).on("mousemove", onLinePaint);
+				break;
+			case 'rectangle':
+				$(this).on("mousemove", onRectPaint);
+				break;
+			case 'brush':
+				$(this).on("mousemove", callBrush);
+				break;
+			case 'pen':
+				$(this).on("mousemove", callPen);
+				break;
+			default:		
+				$(this).on("mousemove", callPen);
+		}		
+	}
+	
+	// mouse up event.
+	var stop = function(){
+		console.log("mouse stop.");
+		$(this).off("mousemove", onLinePaint);
+		$(this).off("mousemove", onRectPaint);
+		$(this).off("mousemove", callBrush);
+		$(this).off("mousemove", callPen);
+		// Writing down to real canvas now
+		ctx.drawImage(tmp_canvas, 0, 0);
+		// Clearing tmp canvas
+		tmp_ctx.clearRect(0, 0, tmp_canvas.width, tmp_canvas.height);
+		points.length = 0;
+	}
+	
+	$(this).on("mousedown", start);
+	$(this).on("mousemove", move);	
+	$(this).on("mouseup", stop);
+					
+});
+</script>
+    
+</head>
+
+<body>
+
+<div class="header">
+    <div class="left"><span id="title">Znapshop Pro</span></div>
+    <div class="right">
+        <div class="panel left">
+            <div style="background-color:#fff; float:left; margin:0 3px; height:16px;">
+            <img id="new" src="images/new.png" alt="Clear" title="Clear" />
+            </div>
+        </div>
+        <div class="panel left">
+            <div class="tool left">
+            <img id="pen" src="images/pen.png" class="selected" alt="Pen" title="Pen" />
+            </div>
+            <div class="tool left">
+            <img id="line" src="images/line.png" alt="Line" title="Line" />
+            </div>
+            <div class="tool left">
+            <img id="rectangle" src="images/rectangle.png" alt="Rectangle" title="Rectangle" />
+            </div>
+            <div class="tool left">
+            <img id="brush" src="images/brush.png" alt="Brush" title="Brush" />
+            </div>
+        </div>
+        <div class="panel left">
+            <div class="palette-box">
+                <div class="palette yellow"></div>
+            </div>	
+            <div class="palette-box">
+                <div class="palette red"></div>
+            </div>
+            <div class="palette-box">
+                <div class="palette blue"></div>
+            </div>
+            <div class="palette-box">
+                <div class="palette green"></div>
+            </div>
+            <div class="palette-box">
+                <div class="palette black"></div>
+            </div>		
+            <div style="clear:both"></div>
+        </div>
+        <div class="panel left" style="border:none;">
+			<select class="size">
+                <option value="1" selected="selected">1</option>
+                <option value="3">3</option>
+                <option value="5">5</option>
+                <option value="7">7</option>
+                <option value="9">9</option>
+                <option value="11">11</option>
+		  	</select>        
+        </div>
+	</div>  
+</div>
+
+<div id="container">
+    <canvas id="canvas" ></canvas>
+</div>
+ 
+<div class="footer"></div>
+</body>
+</html>
